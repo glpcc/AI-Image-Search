@@ -1,22 +1,23 @@
 version: '3'
 services:
-  clickhouse:
+  clickhousedb:
     image: clickhouse/clickhouse-server
+    container_name: clickhousedb
     volumes:
       - ai_image_search_data:/var/lib/clickhouse
       - ./clickhouseinit.sql:/docker-entrypoint-initdb.d/clickhouseinit.sql
     ports:
-      - 8123:8123
-      - 9000:9000
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:9000:9000
     networks:
       - clickhouse-net
     environment:
       - CLICKHOUSE_USER=user
       - CLICKHOUSE_PASSWORD=apasswordtochange
-      - CLICKHOUSE_DATABASE=ai_image_search
 
 networks:
   clickhouse-net:
-volume:
+
+volumes:
   ai_image_search_data:
     driver: local

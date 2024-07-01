@@ -1,9 +1,11 @@
 from deepface import DeepFace
 from deepface.detectors.DetectorWrapper import build_model
+
 from PIL import Image
 import deepface.DeepFace
 import numpy as np
 import cv2
+
 
 # Preload model for faster inference, (once this function is called the model is a global variable)
 model_name = 'retinaface'

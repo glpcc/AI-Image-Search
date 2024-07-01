@@ -16,6 +16,7 @@ def detect_faces(files):
         img = Image.open(file)
         new_img,faces = detect_face(np.array(img))
         embeddings = calculate_embedding(faces)
+        print(len(embeddings[0]))
         images.append(new_img)
     total_time = time.time() - a
     print(f"Total time taken: {total_time}")
