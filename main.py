@@ -1,23 +1,26 @@
 import gradio as gr
 from face_recognition import detect_face
-from embedding_calculator_cold import calculate_embedding
+from embedding_calculator import calculate_embedding
 from PIL import Image
 import numpy as np
 import time
+import cProfile
+import pstats
 
 def detect_faces(files):
+    # with cProfile.Profile() as pr:
     images = []
     total_time = 0
+    a = time.time()
     for file in files:
         img = Image.open(file)
         new_img,faces = detect_face(np.array(img))
-        a = time.perf_counter()
         embeddings = calculate_embedding(faces)
-        b = time.perf_counter()
-        print(f"Time taken to calculate embeddings: {b-a}")
-        total_time += b-a
         images.append(new_img)
+    total_time = time.time() - a
     print(f"Total time taken: {total_time}")
+    # stats = pstats.Stats(pr).sort_stats(pstats.SortKey.TIME)
+    # stats.print_stats()
     return images
 
 
