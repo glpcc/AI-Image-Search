@@ -1,14 +1,23 @@
 import gradio as gr
 from face_recognition import detect_face
+from embedding_calculator_cold import calculate_embedding
 from PIL import Image
 import numpy as np
+import time
 
-def show_images(files):
+def detect_faces(files):
     images = []
+    total_time = 0
     for file in files:
         img = Image.open(file)
-        img = detect_face(np.array(img))
-        images.append(img)
+        new_img,faces = detect_face(np.array(img))
+        a = time.perf_counter()
+        embeddings = calculate_embedding(faces)
+        b = time.perf_counter()
+        print(f"Time taken to calculate embeddings: {b-a}")
+        total_time += b-a
+        images.append(new_img)
+    print(f"Total time taken: {total_time}")
     return images
 
 
@@ -63,7 +72,7 @@ with gr.Blocks(css=css) as demo:
 
     gr.on(
         triggers=[upload_button.click],
-        fn=show_images,
+        fn=detect_faces,
         inputs=[
             files
         ],
