@@ -37,7 +37,7 @@ css = """
 }
 """
 
-with gr.Blocks(css=css) as demo:
+with gr.Blocks(css=css,delete_cache=(80000,70000)) as demo:
     with gr.Row():
         gr.Markdown(f"""
             AI Image Search

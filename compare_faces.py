@@ -12,13 +12,16 @@ def extract_face_name(face_embeddings: list[np.ndarray])-> list[str | None]:
             raise ValueError("Embedding should be of size 512")
         
         result = client.query(f'''SELECT
+                        id,
                         face_name,
-                        min(cosineDistance(
+                        cosineDistance(
                             %(embd)s,
                             face_embedding
-                        )) AS confidence
+                        ) AS confidence
                     FROM ai_image_search.face_data
-                    GROUP BY face_name''', {'embd': embedding.tolist()})
+                    ORDER BY confidence asc 
+                    LIMIT 1
+                    ''', {'embd': embedding.tolist()})
         
         # If there are no results, we can say that the face is not recognized
         if len(result.result_rows) == 0:
@@ -36,4 +39,4 @@ def extract_face_name(face_embeddings: list[np.ndarray])-> list[str | None]:
         face_names.append(None)
     return face_names
 
-a = extract_face_name([np.array([1,2,3])])
+a = extract_face_name([np.zeros(512)])
