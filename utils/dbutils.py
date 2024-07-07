@@ -31,7 +31,7 @@ def get_faces_to_name()-> list[tuple[int,Image.Image]]:
     return result
 
 
-def store_face(faces: list[dict], faces_names_and_ids: list[tuple[int,str] | None],embeddings: np.ndarray,image_id: int)-> list[str | None]:
+def store_face(faces: list[dict], faces_names_and_ids: list[tuple[int,str] | None],embeddings: np.ndarray,image_id: int)-> list[str]:
     client = get_client()
     result = []
     for face,face_name,embedding in zip(faces,faces_names_and_ids,embeddings):
