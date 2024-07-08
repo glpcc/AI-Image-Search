@@ -7,9 +7,8 @@ import os
 import random
 from PIL import Image
 
-clickhouse_client = None
+clickhouse_client = clickhouse_connect.get_client(host="localhost",port=8123,user="user",password="apasswordtochange")
 def get_client() -> Client:
-    global clickhouse_client
     if clickhouse_client is None:
         # TODO Change default user and password 
         client = clickhouse_connect.get_client(host="localhost",port=8123,user="user",password="apasswordtochange")
@@ -81,6 +80,35 @@ def store_face_name(face_id: int,face_name: str):
                 ''', {'face_id': face_id})
     
     client.insert(table="face_data",database="ai_image_search",data=[(face_id,face_name,dbresult.result_rows[0][2],dbresult.result_rows[0][3])])
+
+def get_named_faces()-> dict[str,list[int]]:
+    client = get_client()
+    dbresult = client.query(f'''SELECT
+                    id,
+                    face_name
+                FROM ai_image_search.face_data FINAL
+                WHERE face_name != 'Not Named'
+                
+                ''')
+    faces_to_ids = dict()
+    # Join the faces with the same name
+    for id,face_name in dbresult.result_rows:
+        if face_name not in faces_to_ids:
+            faces_to_ids[face_name] = []
+        faces_to_ids[face_name].append(id)
+    return faces_to_ids
+
+def get_images_by_face(faces_ids: list[int])-> list[str]:
+    client = get_client()
+    dbresult = client.query(f'''
+                SELECT
+                    any(image_name)
+                FROM ai_image_search.image_faces INNER JOIN ai_image_search.image_data on image_id = id
+                WHERE face_id in %(faces_ids)s
+                GROUP BY image_id
+                HAVING uniqExact(face_id) = %(faces_ids_len)s
+                ''', {'faces_ids': faces_ids,'faces_ids_len': len(faces_ids)})
+    return [image_name[0] for image_name in dbresult.result_rows] # type: ignore
 
 def extract_face_name(face_embeddings: np.ndarray,threshold = 0.3)-> list[tuple[int,str] | None]:
     client = get_client()

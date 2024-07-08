@@ -39,8 +39,8 @@ def detect_faces(files: list[str],annotated_images: list[tuple[str,list[tuple[st
         print(f"Image {i+1} processed of {len(files)}")
     total_time = time.time() - a
     print(f"Total time taken: {total_time}")
-    # stats = pstats.Stats(pr).sort_stats(pstats.SortKey.TIME)
-    # stats.print_stats()
+    # stats = pstats.Stats(pr).sort_stats(pstats.SortKey.CUMULATIVE)
+    # stats.print_stats(50)
     return annotated_images[0], 0
 
 
@@ -68,7 +68,6 @@ def search_images(search_prompt):
     print(search_prompt)
     return search_prompt
 
-
 def next_annotated_image(annotated_images: list[tuple[str,list[tuple[str,str]]]],annotated_images_index: int):
     if annotated_images_index < len(annotated_images)-1:
         return annotated_images[annotated_images_index+1], annotated_images_index+1
@@ -81,13 +80,28 @@ def prev_annotated_image(annotated_images: list[tuple[str,list[tuple[str,str]]]]
     else:
         return annotated_images[annotated_images_index], annotated_images_index
 
+def search_by_face(multi_select_faces: list[str],posible_choises_state: dict[str,list[int]]):
+    faces_ids = []
+    for face_name in multi_select_faces:
+        faces_ids.extend(posible_choises_state[face_name])
+    image_list = dbutils.get_images_by_face(faces_ids)
+    image_result = [(image,f'Image {i}') for i,image in enumerate(image_list)]
+    return image_result
+
 css = """
 #upload_button {
     width: 100%; !important;
 }
 """
+def visibility_logic(func = None, *args, **kwargs):
+    if func == name_faces or func == search_by_face:
+        return (gr.Row(visible=True),gr.Row(visible=False),gr.Row(visible=False))
+    elif func == detect_faces:
+        return (gr.Row(visible=False),gr.Row(visible=True),gr.Row(visible=True))
+    
 
-with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(86000,86000) to erase the images after 24 hours or after server restart
+
+with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the images after 24 hours or after server restart
     faces_index = gr.State( 0)
     not_known_faces = gr.State([])
     annotated_images = gr.State([])
@@ -105,7 +119,7 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
             with gr.Row():
                 upload_button = gr.Button("Upload",elem_id="upload_button",size='lg')
 
-            with gr.Row():
+            with gr.Row(visible=False):
                 search_prompt = gr.Text(
                     label="Search Prompt",
                     show_label=False,
@@ -125,34 +139,58 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
                 )
                 name_face_button = gr.Button("Name Face", scale=0)
             with gr.Row():
+                posible_choises = dbutils.get_named_faces()
+                posible_choises_state = gr.State(posible_choises)
+                multi_select_faces = gr.CheckboxGroup(
+                    label="Select the faces you want to appear in the gallery",
+                    choices=list(posible_choises.keys()),
+                    container=False,
+                )
+                search_by_face_button = gr.Button("Search by Face", scale=0)
+            with gr.Row():
                 clean_db_button = gr.Button("Clean Database", scale=0)
         with gr.Column(elem_id="col-container-images"):
-            with gr.Row():
+            with gr.Row(visible=False) as images_container:
                 images = gr.Gallery(selected_index=0)
-            with gr.Row():
+            with gr.Row(visible=False) as annotated_image_container:
                 annotated_image = gr.AnnotatedImage()
-            with gr.Row():
+            with gr.Row(visible=False) as buttons_container:
                 prev_button = gr.Button("Prev")
                 next_button = gr.Button("Next")
-                
+    # Set the triggers
+
+    # Trigger for the next annotated image          
     gr.on(
         triggers=[next_button.click],
         fn=next_annotated_image,
         inputs=[annotated_images,annotated_images_index],
         outputs=[annotated_image,annotated_images_index],
     )
+    # Trigger for the previous annotated image
     gr.on(
         triggers=[prev_button.click],
         fn=prev_annotated_image,
         inputs=[annotated_images,annotated_images_index],
         outputs=[annotated_image,annotated_images_index],
     )
+    # Trigger for the clean database button
     gr.on(
         triggers=[clean_db_button.click],
         fn=dbutils.clean_db,
         inputs=[],
         outputs=[],
     )
+
+    # Trigger to handle the visibility of components to start naming the faces
+    gr.on(
+        triggers=[name_face_button.click],
+        fn=lambda *args,**kwargs: visibility_logic(name_faces,*args,**kwargs),
+        inputs=[
+        ],
+        outputs=[images_container,annotated_image_container,buttons_container],
+    )
+
+    # Trigger to start naming the faces
     gr.on(
         triggers=[name_face_button.click],
         fn=name_faces,
@@ -164,6 +202,7 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
         outputs=[images,faces_index],
     )
 
+    # Trigger to search by menaing
     gr.on(
         triggers=[search_button.click],
         fn=search_images,
@@ -173,6 +212,15 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
         outputs=[images],
     )
 
+    # Trigger for the visibility of the components to start the face detection
+    gr.on(
+        triggers=[upload_button.click],
+        fn=lambda *args,**kwargs: visibility_logic(detect_faces,*args,**kwargs),
+        inputs=[],
+        outputs=[images_container,annotated_image_container,buttons_container],
+    ) 
+
+    # Trigger for the face detection
     gr.on(
         triggers=[upload_button.click],
         fn=detect_faces,
@@ -184,4 +232,24 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
         outputs=[annotated_image,annotated_images_index],
     )
 
-demo.launch()
+    # Trigger for the visibility of the components to search by face
+    gr.on(
+        triggers=[search_by_face_button.click],
+        fn=lambda *args,**kwargs: visibility_logic(search_by_face,*args,**kwargs),
+        inputs=[],
+        outputs=[images_container,annotated_image_container,buttons_container],
+    )
+
+    # Trigger for the search by face
+    gr.on(
+        triggers=[search_by_face_button.click],
+        fn=search_by_face,
+        inputs=[
+            multi_select_faces,
+            posible_choises_state
+        ],
+        outputs=[images],
+    )
+
+
+demo.launch(share=False)
