@@ -65,6 +65,10 @@ def calculate_images_embedding(images: list[str])-> list[np.ndarray]:
     print("Starting to calculate embeddings")
     batch_size = 16
     loaded_images = [Image.open(image) for image in images]
+    # Remove alpha channel if it exists
+    for i in range(len(loaded_images)):
+        if loaded_images[i].mode == "RGBA":
+            loaded_images[i] = loaded_images[i].convert("RGB")
     embeddings = []
     for i in range(0, len(images), batch_size):
         end_indx = i+batch_size if i+batch_size < len(images) else len(images)
@@ -74,8 +78,11 @@ def calculate_images_embedding(images: list[str])-> list[np.ndarray]:
         logits = outputs.pooler_output
         batch_embeddings = logits.cpu().detach().numpy()
         embeddings.extend(batch_embeddings)
-    print("hola")
-    print(len(embeddings),embeddings[0].shape)
+        # Free memory
+        del outputs
+        del logits
+        del batch_embeddings
+        del inputs
     return embeddings
 
 text_model = SiglipTextModel.from_pretrained("google/siglip-base-patch16-256-multilingual")

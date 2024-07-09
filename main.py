@@ -18,6 +18,10 @@ def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple
         img = Image.open(file)
         # Detect the faces in the image
         faces = MLutils.detect_face(np.array(img))
+        
+        # Generate a random image id
+        image_id = random.randint(0,2**64)
+        images_ids.append(image_id)
 
         # Continue if there are no faces in the image
         if len(faces) == 0:
@@ -29,10 +33,7 @@ def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple
         faces_names_and_ids = dbutils.extract_face_name(embeddings)
         # print(faces_names_and_ids)
 
-        # Generate a random image id
-        image_id = random.randint(0,2**64)
-        images_ids.append(image_id)
-
+        
         # Store the faces in the database
         faces_names_and_ids = dbutils.store_face(faces,faces_names_and_ids,embeddings,image_id)
         # print(faces_names_and_ids)
@@ -100,12 +101,20 @@ def prev_annotated_image(annotated_images: list[tuple[str,list[tuple[str,str]]]]
         return annotated_images[annotated_images_index], annotated_images_index
 
 def search_by_face(multi_select_faces: list[str],posible_choises_state: dict[str,list[int]]):
+    print(multi_select_faces)
+    print(posible_choises_state)
     faces_ids = []
+    num_repeated_face_names = 0
     for face_name in multi_select_faces:
         faces_ids.extend(posible_choises_state[face_name])
-    image_list = dbutils.get_images_by_face(faces_ids)
+        num_repeated_face_names += len(posible_choises_state[face_name]) - 1
+    image_list = dbutils.get_images_by_face(faces_ids,num_repeated_face_names)
     image_result = [(image,f'Image {i}') for i,image in enumerate(image_list)]
     return image_result
+
+def update_face_names():
+    posible_choises = dbutils.get_named_faces()
+    return posible_choises, gr.CheckboxGroup(choices=list(posible_choises.keys()),container=False)
 
 css = """
 #upload_button {
@@ -171,6 +180,7 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
                 search_by_face_button = gr.Button("Search by Face", scale=0)
             with gr.Row():
                 clean_db_button = gr.Button("Clean Database", scale=0)
+                update_face_names_button = gr.Button("Update face names", scale=0)
         with gr.Column(elem_id="col-container-images"):
             with gr.Row(visible=False) as images_container:
                 images = gr.Gallery(selected_index=0)
@@ -282,5 +292,12 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
         outputs=[images],
     )
 
+    # Trigger for the update face names button
+    gr.on(
+        triggers=[update_face_names_button.click],
+        fn=update_face_names,
+        inputs=[],
+        outputs=[posible_choises_state,multi_select_faces],
+    )
 
 demo.launch(share=False)

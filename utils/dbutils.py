@@ -53,6 +53,7 @@ def store_face(faces: list[dict], faces_names_and_ids: list[tuple[int,str] | Non
         img.save(face_path)
         # Insert the face in the database
         client.insert(table="face_data",database="ai_image_search",data=[(new_face_id,"Not Named",embedding,face_path)])
+        client.insert(table="image_faces",database="ai_image_search",data=[(image_id,new_face_id)])
         result.append([new_face_id,"Not Named"])
 
     return result
@@ -92,7 +93,9 @@ def get_named_faces()-> dict[str,list[int]]:
         faces_to_ids[face_name].append(id)
     return faces_to_ids
 
-def get_images_by_face(faces_ids: list[int])-> list[str]:
+def get_images_by_face(faces_ids: list[int],num_repeated_face_names: int)-> list[str]:
+    print(f"Num repeated face names: {num_repeated_face_names}")
+    print(f"Faces ids: {faces_ids}")
     client = get_client()
     dbresult = client.query(f'''
                 SELECT
@@ -101,7 +104,7 @@ def get_images_by_face(faces_ids: list[int])-> list[str]:
                 WHERE face_id in %(faces_ids)s
                 GROUP BY image_id
                 HAVING uniqExact(face_id) = %(faces_ids_len)s
-                ''', {'faces_ids': faces_ids,'faces_ids_len': len(faces_ids)})
+                ''', {'faces_ids': faces_ids,'faces_ids_len': len(faces_ids) - num_repeated_face_names})
     return [image_name[0] for image_name in dbresult.result_rows] # type: ignore
 
 def extract_face_name(face_embeddings: np.ndarray,threshold = 0.3)-> list[tuple[int,str] | None]:
