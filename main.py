@@ -1,48 +1,64 @@
 import gradio as gr
-from utils.face_recognition import detect_face
-from utils.embedding_calculator import calculate_embedding
+import utils.MLutils as MLutils
 from utils import dbutils
 from PIL import Image
 import numpy as np
 import time
+import random
 import cProfile
 import pstats
 
-def detect_faces(files: list[str],annotated_images: list[tuple[str,list[tuple[str,str]]]],annotated_images_index: int):
+def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple[str,str]]]],annotated_images_index: int):
     # with cProfile.Profile() as pr:
     annotated_images.clear()
     total_time = 0
     a = time.time()
+    images_ids = []
     for i,file in enumerate(files):
         img = Image.open(file)
         # Detect the faces in the image
-        faces = detect_face(np.array(img))
+        faces = MLutils.detect_face(np.array(img))
+
         # Continue if there are no faces in the image
         if len(faces) == 0:
             continue
         # Calculate the embeddings of the faces
-        embeddings = calculate_embedding(faces)
+        embeddings = MLutils.calculate_face_embedding(faces)
+
         # Get if there is any similar face in the database
         faces_names_and_ids = dbutils.extract_face_name(embeddings)
         # print(faces_names_and_ids)
-        # Store the image in the database
-        image_id = dbutils.store_image(file)[0]
+
+        # Generate a random image id
+        image_id = random.randint(0,2**64)
+        images_ids.append(image_id)
+
         # Store the faces in the database
         faces_names_and_ids = dbutils.store_face(faces,faces_names_and_ids,embeddings,image_id)
         # print(faces_names_and_ids)
+
         new_annotated_image = (file,[])
         for face,face_name_and_id in zip(faces,faces_names_and_ids):
             x2 = face['facial_area']['x'] + face['facial_area']['w']
             y2 = face['facial_area']['y'] + face['facial_area']['h']
             new_annotated_image[1].append(((face['facial_area']['x'],face['facial_area']['y'],x2,y2),face_name_and_id[1]))
         annotated_images.append(new_annotated_image)
+
         print(f"Image {i+1} processed of {len(files)}")
+
     total_time = time.time() - a
     print(f"Total time taken: {total_time}")
+
+    #calculate the embeddings of the images and store them in the database
+    store_images(files,images_ids)
+    print("Images stored in the database")
     # stats = pstats.Stats(pr).sort_stats(pstats.SortKey.CUMULATIVE)
     # stats.print_stats(50)
     return annotated_images[0], 0
 
+def store_images(files: list[str], images_ids: list[int]):
+    embeddings = MLutils.calculate_images_embedding(files)
+    dbutils.store_images(files,images_ids,embeddings)
 
 def name_faces(face_name: str,faces_indx: int,not_known_faces: list[tuple[int,Image.Image]]):
     if faces_indx == 0:
@@ -64,9 +80,12 @@ def name_faces(face_name: str,faces_indx: int,not_known_faces: list[tuple[int,Im
     else:
         return [], 0
 
-def search_images(search_prompt):
-    print(search_prompt)
-    return search_prompt
+def search_images(search_prompt: str,max_images: float):
+    max_images = int(max_images)
+    text_embedding = MLutils.calculate_text_embedding(search_prompt)
+    image_list = dbutils.search_images_by_embbeding(text_embedding,max_images)
+    image_list = [(image,f'Score {200 - score*100:.2f}') for image,score in image_list]
+    return image_list
 
 def next_annotated_image(annotated_images: list[tuple[str,list[tuple[str,str]]]],annotated_images_index: int):
     if annotated_images_index < len(annotated_images)-1:
@@ -94,14 +113,14 @@ css = """
 }
 """
 def visibility_logic(func = None, *args, **kwargs):
-    if func == name_faces or func == search_by_face:
+    if func == name_faces or func == search_by_face or func == search_images:
         return (gr.Row(visible=True),gr.Row(visible=False),gr.Row(visible=False))
-    elif func == detect_faces:
+    elif func == proccess_images:
         return (gr.Row(visible=False),gr.Row(visible=True),gr.Row(visible=True))
     
 
 
-with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the images after 24 hours or after server restart
+with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(86000,86000) to erase the images after 24 hours or after server restart
     faces_index = gr.State( 0)
     not_known_faces = gr.State([])
     annotated_images = gr.State([])
@@ -119,7 +138,7 @@ with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the i
             with gr.Row():
                 upload_button = gr.Button("Upload",elem_id="upload_button",size='lg')
 
-            with gr.Row(visible=False):
+            with gr.Row(visible=True):
                 search_prompt = gr.Text(
                     label="Search Prompt",
                     show_label=False,
@@ -128,6 +147,9 @@ with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the i
                     container=False,
                 )
                 search_button = gr.Button("Search", scale=0)
+
+            with gr.Row(visible=True):
+                max_images = gr.Slider(label="Max Images", minimum=1, maximum=100, step=1, value=30)
             
             with gr.Row():
                 name_face_prompt = gr.Text(
@@ -202,12 +224,21 @@ with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the i
         outputs=[images,faces_index],
     )
 
+    # Trigger for the visibility of the components to start the face detection
+    gr.on(
+        triggers=[search_button.click],
+        fn=lambda *args,**kwargs: visibility_logic(search_images,*args,**kwargs),
+        inputs=[],
+        outputs=[images_container,annotated_image_container,buttons_container],
+    ) 
+
     # Trigger to search by menaing
     gr.on(
         triggers=[search_button.click],
         fn=search_images,
         inputs=[
-            search_prompt
+            search_prompt,
+            max_images
         ],
         outputs=[images],
     )
@@ -215,7 +246,7 @@ with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the i
     # Trigger for the visibility of the components to start the face detection
     gr.on(
         triggers=[upload_button.click],
-        fn=lambda *args,**kwargs: visibility_logic(detect_faces,*args,**kwargs),
+        fn=lambda *args,**kwargs: visibility_logic(proccess_images,*args,**kwargs),
         inputs=[],
         outputs=[images_container,annotated_image_container,buttons_container],
     ) 
@@ -223,7 +254,7 @@ with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the i
     # Trigger for the face detection
     gr.on(
         triggers=[upload_button.click],
-        fn=detect_faces,
+        fn=proccess_images,
         inputs=[
             files,
             annotated_images,

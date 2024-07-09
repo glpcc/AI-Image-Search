@@ -57,17 +57,11 @@ def store_face(faces: list[dict], faces_names_and_ids: list[tuple[int,str] | Non
 
     return result
 
-def store_image(image: str)-> tuple[int,str,np.ndarray]:
+def store_images(images: list[str],image_ids: list[int], embeddings: list[np.ndarray])-> None:
     client = get_client()
-    result = []
-    # TODO Calculate the image embedding
-    image_embedding = np.random.rand(512)
-    # Generate a 64bit id for the image
-    new_image_id = random.randint(0,2**64)
+    all_data = [(image_id,image,embedding) for image,image_id,embedding in zip(images,image_ids,embeddings)]
     # Insert the image in the database
-    client.insert(table="image_data",database="ai_image_search",data=[(new_image_id,image,image_embedding)])
-
-    return (new_image_id,image,image_embedding)
+    client.insert(table="image_data",database="ai_image_search",data=all_data)
 
 def store_face_name(face_id: int,face_name: str):
     client = get_client()
@@ -145,6 +139,22 @@ def extract_face_name(face_embeddings: np.ndarray,threshold = 0.3)-> list[tuple[
 
         face_names_and_ids.append(None)
     return face_names_and_ids
+
+def search_images_by_embbeding(embedding: np.ndarray,limit: int)-> list[tuple[str,float]]:
+    client = get_client()
+    result = client.query(f'''SELECT
+                    image_name,
+                    cosineDistance(
+                        %(embd)s,
+                        image_embedding
+                    ) AS score
+                FROM ai_image_search.image_data
+                ORDER BY score ASC
+                LIMIT %(limit)s''', {'embd': embedding.tolist(),'limit': limit})
+    return [tuple(image_data) for image_data in result.result_rows]
+
+
+
 
 # TODO Remove this function
 def clean_db():

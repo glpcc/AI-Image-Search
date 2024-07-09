@@ -1,10 +1,12 @@
 from deepface import DeepFace
 from deepface.detectors.DetectorWrapper import build_model
-
 from PIL import Image
-import deepface.DeepFace
 import numpy as np
-import cv2
+from deepface.modules import preprocessing
+from transformers import AutoTokenizer, SiglipTextModel , SiglipVisionModel ,AutoImageProcessor
+import time
+
+# Preload the face r
 
 
 # Preload model for faster inference, (once this function is called the model is a global variable)
