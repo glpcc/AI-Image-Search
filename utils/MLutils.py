@@ -63,16 +63,18 @@ image_model.to(device) # type: ignore
 
 def calculate_images_embedding(images: list[str])-> list[np.ndarray]:
     print("Starting to calculate embeddings")
-    batch_size = 16
-    loaded_images = [Image.open(image) for image in images]
-    # Remove alpha channel if it exists
-    for i in range(len(loaded_images)):
-        if loaded_images[i].mode == "RGBA":
-            loaded_images[i] = loaded_images[i].convert("RGB")
+    batch_size = 32
     embeddings = []
     for i in range(0, len(images), batch_size):
         end_indx = i+batch_size if i+batch_size < len(images) else len(images)
-        inputs = image_processor(images=loaded_images[i:end_indx], return_tensors="pt")
+        input_images = []
+        for j in range(i,end_indx):
+            img = Image.open(images[j])
+            # Remove alpha channel if it exists
+            if img.mode == "RGBA":
+                img = img.convert("RGB")
+            input_images.append(img)
+        inputs = image_processor(images=input_images, return_tensors="pt")
         inputs = inputs.to(device)
         outputs = image_model(**inputs) # type: ignore
         logits = outputs.pooler_output
@@ -83,6 +85,8 @@ def calculate_images_embedding(images: list[str])-> list[np.ndarray]:
         del logits
         del batch_embeddings
         del inputs
+        input_images.clear()
+        torch.cuda.empty_cache()
     return embeddings
 
 text_model = SiglipTextModel.from_pretrained("google/siglip-base-patch16-256-multilingual")

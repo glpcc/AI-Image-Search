@@ -18,13 +18,14 @@ def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple
         img = Image.open(file)
         # Detect the faces in the image
         faces = MLutils.detect_face(np.array(img))
-        
+
         # Generate a random image id
         image_id = random.randint(0,2**64)
         images_ids.append(image_id)
 
         # Continue if there are no faces in the image
         if len(faces) == 0:
+            print(f"Image {i+1} processed of {len(files)} with no faces detected")
             continue
         # Calculate the embeddings of the faces
         embeddings = MLutils.calculate_face_embedding(faces)
@@ -55,15 +56,19 @@ def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple
     print("Images stored in the database")
     # stats = pstats.Stats(pr).sort_stats(pstats.SortKey.CUMULATIVE)
     # stats.print_stats(50)
-    return annotated_images[0], 0
+    if len(annotated_images) > 0:
+        return annotated_images[0], 0
+    else:
+        return ("",[]), 0
 
 def store_images(files: list[str], images_ids: list[int]):
     embeddings = MLutils.calculate_images_embedding(files)
     dbutils.store_images(files,images_ids,embeddings)
 
-def name_faces(face_name: str,faces_indx: int,not_known_faces: list[tuple[int,Image.Image]]):
+def name_faces(face_name: str,faces_indx: int,not_known_faces: list[tuple[int,Image.Image]],num_of_face_appeareces_slider_value: float):
+    num_of_face_appeareces_slider_value = int(num_of_face_appeareces_slider_value)
     if faces_indx == 0:
-        temp = dbutils.get_faces_to_name()
+        temp = dbutils.get_faces_to_name(num_of_face_appeareces_slider_value)
         not_known_faces.clear()
         for face in temp:
             not_known_faces.append(face)
@@ -74,7 +79,8 @@ def name_faces(face_name: str,faces_indx: int,not_known_faces: list[tuple[int,Im
             return [], 0
 
     if face_name != "":
-            dbutils.store_face_name(not_known_faces[faces_indx-1][0],face_name)
+        face_name = face_name.strip().lower()
+        dbutils.store_face_name(not_known_faces[faces_indx-1][0],face_name)
     if faces_indx < len(not_known_faces):
         image = not_known_faces[faces_indx][1]
         return [image], faces_indx+1
@@ -101,8 +107,6 @@ def prev_annotated_image(annotated_images: list[tuple[str,list[tuple[str,str]]]]
         return annotated_images[annotated_images_index], annotated_images_index
 
 def search_by_face(multi_select_faces: list[str],posible_choises_state: dict[str,list[int]]):
-    print(multi_select_faces)
-    print(posible_choises_state)
     faces_ids = []
     num_repeated_face_names = 0
     for face_name in multi_select_faces:
@@ -165,10 +169,12 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
                     label="FaceName",
                     show_label=False,
                     max_lines=1,
-                    placeholder="Enter the face name in the same order as the faces in the gallery",
+                    placeholder="Enter the face name of the person in the image, leave empty if you don't know the person",
                     container=False,
                 )
                 name_face_button = gr.Button("Name Face", scale=0)
+            with gr.Row(visible=True):
+                num_of_face_appeareces_slider = gr.Slider(label="Number of times the face must appear to name it", minimum=1, maximum=10, step=1, value=2)
             with gr.Row():
                 posible_choises = dbutils.get_named_faces()
                 posible_choises_state = gr.State(posible_choises)
@@ -229,7 +235,8 @@ with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(
         inputs=[
             name_face_prompt,
             faces_index,
-            not_known_faces
+            not_known_faces,
+            num_of_face_appeareces_slider
         ],
         outputs=[images,faces_index],
     )

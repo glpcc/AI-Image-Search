@@ -16,15 +16,16 @@ def get_client() -> Client:
     else:
         return clickhouse_client
 
-def get_faces_to_name()-> list[tuple[int,Image.Image]]:
+def get_faces_to_name(num_of_needed_appearances: int)-> list[tuple[int,Image.Image]]:
     client = get_client()
     dbresult = client.query(f'''SELECT
                     id,
-                    example_image_name
-                FROM ai_image_search.face_data FINAL
+                    any(example_image_name)
+                FROM ai_image_search.face_data JOIN ai_image_search.image_faces on id = face_id
                 WHERE face_name = 'Not Named'
-                
-                ''')
+                GROUP BY id
+                HAVING count() >= %(num_of_needed_appearances)s
+                ''', {'num_of_needed_appearances': num_of_needed_appearances})
     # TODO Handle the file not found exception
     result = [ (id,Image.open(example_image_name)) for id,example_image_name in dbresult.result_rows]
     return result
@@ -94,8 +95,8 @@ def get_named_faces()-> dict[str,list[int]]:
     return faces_to_ids
 
 def get_images_by_face(faces_ids: list[int],num_repeated_face_names: int)-> list[str]:
-    print(f"Num repeated face names: {num_repeated_face_names}")
-    print(f"Faces ids: {faces_ids}")
+    # print(f"Num repeated face names: {num_repeated_face_names}")
+    # print(f"Faces ids: {faces_ids}")
     client = get_client()
     dbresult = client.query(f'''
                 SELECT
@@ -107,7 +108,7 @@ def get_images_by_face(faces_ids: list[int],num_repeated_face_names: int)-> list
                 ''', {'faces_ids': faces_ids,'faces_ids_len': len(faces_ids) - num_repeated_face_names})
     return [image_name[0] for image_name in dbresult.result_rows] # type: ignore
 
-def extract_face_name(face_embeddings: np.ndarray,threshold = 0.3)-> list[tuple[int,str] | None]:
+def extract_face_name(face_embeddings: np.ndarray,threshold = 0.4)-> list[tuple[int,str] | None]:
     client = get_client()
     face_names_and_ids = []
     # Get the nearest neighbors for each face embedding
