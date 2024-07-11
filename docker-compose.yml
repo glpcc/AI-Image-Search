@@ -11,9 +11,8 @@ services:
       - 127.0.0.1:9000:9000
     networks:
       - clickhouse-net
-    environment:
-      - CLICKHOUSE_USER=user
-      - CLICKHOUSE_PASSWORD=apasswordtochange
+    env_file:
+      - .env
 
 networks:
   clickhouse-net:
@@ -21,3 +20,7 @@ networks:
 volumes:
   ai_image_search_data:
     driver: local
+  
+secrets:
+  clickhouse_password:
+    file: clickhouse_password.txt

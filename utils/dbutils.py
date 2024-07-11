@@ -6,12 +6,24 @@ from dotenv import load_dotenv
 import os
 import random
 from PIL import Image
+import tempfile
 
-clickhouse_client = clickhouse_connect.get_client(host="localhost",port=8123,user="user",password="apasswordtochange")
+# Load the environment variables
+load_dotenv()
+# Get the password from the environment variables
+db_password = os.getenv("CLICKHOUSE_PASSWORD")
+if db_password is None:
+    raise ValueError("No password found in environment variables")
+
+clickhouse_client = clickhouse_connect.get_client(host="localhost",port=8123,user="user",password=db_password)
+temp_folder = tempfile.gettempdir() + "/gradio/faces/"
+os.makedirs(temp_folder,exist_ok=True)
+
+
 def get_client() -> Client:
     if clickhouse_client is None:
         # TODO Change default user and password 
-        client = clickhouse_connect.get_client(host="localhost",port=8123,user="user",password="apasswordtochange")
+        client = clickhouse_connect.get_client(host="localhost",port=8123,user="user",password=db_password) # type: ignore
         return client
     else:
         return clickhouse_client
@@ -26,7 +38,7 @@ def get_faces_to_name(num_of_needed_appearances: int)-> list[tuple[int,Image.Ima
                 GROUP BY id
                 HAVING count() >= %(num_of_needed_appearances)s
                 ''', {'num_of_needed_appearances': num_of_needed_appearances})
-    # TODO Handle the file not found exception
+
     result = [ (id,Image.open(example_image_name)) for id,example_image_name in dbresult.result_rows]
     return result
 
@@ -41,9 +53,6 @@ def store_face(faces: list[dict], faces_names_and_ids: list[tuple[int,str] | Non
             client.insert(table="image_faces",database="ai_image_search",data=[(image_id,face_name[0])])
             continue       
         
-
-        # TODO: Change this path to a more general one
-        temp_folder = "C:\\Users\\gonza\\AppData\\Local\\Temp\\gradio\\faces\\"
 
         # Generate a 64bit id for the face
         new_face_id = random.randint(0,2**64)

@@ -26,6 +26,7 @@ def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple
         # Continue if there are no faces in the image
         if len(faces) == 0:
             print(f"Image {i+1} processed of {len(files)} with no faces detected")
+            annotated_images.append((file,[]))
             continue
         # Calculate the embeddings of the faces
         embeddings = MLutils.calculate_face_embedding(faces)
@@ -59,7 +60,7 @@ def proccess_images(files: list[str],annotated_images: list[tuple[str,list[tuple
     if len(annotated_images) > 0:
         return annotated_images[0], 0
     else:
-        return ("",[]), 0
+        raise Exception("No images to show")
 
 def store_images(files: list[str], images_ids: list[int]):
     embeddings = MLutils.calculate_images_embedding(files)
@@ -133,7 +134,7 @@ def visibility_logic(func = None, *args, **kwargs):
     
 
 
-with gr.Blocks(css=css,delete_cache=(86000,86000)) as demo: # add delete_cache=(86000,86000) to erase the images after 24 hours or after server restart
+with gr.Blocks(css=css) as demo: # add delete_cache=(86000,86000) to erase the images after 24 hours or after server restart
     faces_index = gr.State( 0)
     not_known_faces = gr.State([])
     annotated_images = gr.State([])

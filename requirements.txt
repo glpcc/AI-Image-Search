@@ -1,0 +1,7 @@
+clickhouse_connect==0.7.4
+deepface==0.0.90
+gradio==4.37.2
+numpy==1.24.3
+Pillow==10.4.0
+torch==2.3.1+cu121
+transformers==4.39.1
